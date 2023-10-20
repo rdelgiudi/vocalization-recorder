@@ -150,13 +150,18 @@ def recording(worker):
     pipeline = rs.pipeline()
     config = rs.config()
 
+    second_audio_disabled = worker.window.disableSecondBox.isChecked()
+
     dateandtime = datetime.datetime.today().isoformat("-", "seconds")
     output_dir = os.path.join(os.getcwd(), "videos")
     first_path = os.path.join(output_dir, "{}_first.wav".format(dateandtime))
     second_path = os.path.join(output_dir, "{}_second.wav".format(dateandtime))
 
     first_wave_file = wave.open(first_path, 'wb')
-    second_wave_file = wave.open(second_path, 'wb')
+    if not second_audio_disabled:
+        second_wave_file = wave.open(second_path, 'wb')
+    else:
+        second_wave_file = None
 
     # Get device product line for setting a supporting resolution
     pipeline_wrapper = rs.pipeline_wrapper(pipeline)
@@ -329,8 +334,6 @@ def recording(worker):
 
         first_wave_file.writeframes(b''.join(first_data))
         first_wave_file.close()
-
-        second_audio_disabled = worker.window.disableSecondBox.isChecked()
 
         if not second_audio_disabled:
             second_wave_file.writeframes(b''.join(second_data))

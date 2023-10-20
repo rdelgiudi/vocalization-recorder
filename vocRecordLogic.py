@@ -123,6 +123,8 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
             if data == "DONE":
                 stream_first.stop_stream()
                 stream_first.close()
+                stream_second.stop_stream()
+                stream_second.close()
                 audio.terminate()
                 break
 
@@ -300,8 +302,8 @@ def recording(worker):
 
             #Thread(target=updateUi, args=(window, depth_image_8U, color_image, fps, totalseconds)).start()
             #updateUi(window, depth_image_8U, color_image, fps, totalseconds)
-            if not data_queue.empty():
-                worker.progress.emit(depth_image_8U, color_image, data_queue.get(), fps, totalseconds)
+            if data_queue.qsize() > 10:
+                worker.progress.emit(depth_image_8U, color_image, data_queue, fps, totalseconds)
             else:
                 worker.progress.emit(depth_image_8U, color_image, None, fps, totalseconds)
             #updateuiend = datetime.datetime.now()    # Wait for the reader and writer threads to exit

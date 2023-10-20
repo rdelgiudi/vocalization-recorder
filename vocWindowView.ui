@@ -368,26 +368,19 @@
      </property>
     </item>
    </widget>
-   <widget class="GraphicsLayoutWidget" name="spectogram" native="true">
+   <widget class="QWidget" name="verticalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>780</y>
-      <width>981</width>
-      <height>181</height>
+      <x>20</x>
+      <y>760</y>
+      <width>1011</width>
+      <height>211</height>
      </rect>
     </property>
+    <layout class="QVBoxLayout" name="plotLayout"/>
    </widget>
   </widget>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>GraphicsLayoutWidget</class>
-   <extends>QWidget</extends>
-   <header>pyqtgraph</header>
-   <container>1</container>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections/>
 </ui>

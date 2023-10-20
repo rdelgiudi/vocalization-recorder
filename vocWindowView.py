@@ -124,9 +124,12 @@ class Ui_MainWindow(object):
         self.freqBox.setObjectName("freqBox")
         self.freqBox.addItem("")
         self.freqBox.addItem("")
-        self.spectogram = GraphicsLayoutWidget(self.centralwidget)
-        self.spectogram.setGeometry(QtCore.QRect(30, 780, 981, 181))
-        self.spectogram.setObjectName("spectogram")
+        self.verticalLayoutWidget = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(20, 760, 1011, 211))
+        self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
+        self.plotLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
+        self.plotLayout.setContentsMargins(0, 0, 0, 0)
+        self.plotLayout.setObjectName("plotLayout")
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
@@ -155,7 +158,6 @@ class Ui_MainWindow(object):
         self.freqLabel.setText(_translate("MainWindow", "Frequency:"))
         self.freqBox.setItemText(0, _translate("MainWindow", "128 kHz"))
         self.freqBox.setItemText(1, _translate("MainWindow", "44.1 kHz"))
-from pyqtgraph import GraphicsLayoutWidget
 
 
 if __name__ == "__main__":

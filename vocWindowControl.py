@@ -1,5 +1,6 @@
 import time
 
+import matplotlib
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -13,7 +14,12 @@ import numpy as np
 
 import pyqtgraph
 import pyaudio
+
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
+import matplotlib.animation
+matplotlib.use('Qt5Agg')
 
 import cv2
 
@@ -73,18 +79,34 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
         p.terminate()
 
-        pyqtgraph.setConfigOptions(imageAxisOrder='row-major')
-        self.p1 = self.spectogram.addPlot()
-        self.img = pyqtgraph.ImageItem()
-        self.p1.addItem(self.img)
+        # pyqtgraph.setConfigOptions(imageAxisOrder='row-major')
+        # self.p1 = self.spectogram.addPlot()
+        # self.img = pyqtgraph.ImageItem()
+        # self.p1.addItem(self.img)
+        #
+        # self.hist = pyqtgraph.HistogramLUTItem()
+        # self.hist.setImageItem(self.img)
+        # self.spectogram.addItem(self.hist)
+        #
+        # self.p1.setLabel('bottom', "Time", units='s')
+        # self.p1.setLabel('left', "Frequency", units='Hz')
+        self.figure = plt.figure()
+        self.canvas = FigureCanvas(self.figure)
+        self.plotLayout.addWidget(self.canvas)
+        self.currentData = None
+        self.ax = self.figure.add_subplot()
+        self.ax.set_ylabel("Frequency [Hz]")
+        self.mesh = None
 
-        self.hist = pyqtgraph.HistogramLUTItem()
-        self.hist.setImageItem(self.img)
-        self.spectogram.addItem(self.hist)
+        def animate(i):
+            if self.currentData is not None:
+                self.mesh.set_array(self.currentData[2].ravel())
+                self.ax.draw_artist(self.mesh)
+                self.canvas.update()
+                self.canvas.flush_events()
+                self.canvas.draw()
 
-        self.p1.setLabel('bottom', "Time", units='s')
-        self.p1.setLabel('left', "Frequency", units='Hz')
-
+        self.anim = matplotlib.animation.FuncAnimation(fig=self.figure, func=animate, interval=0, blit=False, repeat=False)
 
     def closeEvent(self, a0: QCloseEvent) -> None:
 
@@ -94,6 +116,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
     def startClicked(self):
         if not self.isRecording:
+            self.anim.resume()
             self.isRecording = True
             self.startButton.setText("Stop")
 
@@ -104,6 +127,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
             # recordlogic.recording(self)
         else:
+            self.anim.pause()
             self.isRecording = False
             self.errorLabel.setHidden(True)
             self.startButton.setText("Start")
@@ -146,29 +170,36 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.fpsValLabel.setText("{:.2f}".format(fps))
         self.timeValLabel.setText(str(datetime.timedelta(seconds=totalseconds)))
 
-        # if sampled_audio is not None:
-        #     fs = 44100
-        #
-        #     match self.freqBox.currentIndex():
-        #         case 0:
-        #             fs = 181000
-        #         case 1:
-        #             fs = 44100
-        #
-        #     audio_data = np.fromstring(sampled_audio, np.int16)
-        #
-        #     #f, t, Sxx = signal.spectrogram(audio_data, fs)
-        #
-        #     data = np.fft.rfft(audio_data)
-        #
-        #     self.hist.setLevels(np.min(data), np.max(data))
-        #
-        #     self.hist.gradient.restoreState(
-        #         {'mode': 'rgb',
-        #          'ticks': [(0.5, (0, 182, 188, 255)),
-        #                    (1.0, (246, 111, 0, 255)),
-        #                    (0.0, (75, 0, 113, 255))]})
-        #
-        #     self.img.setImage(data)
-        #     #self.img.scale(t[-1]/np.size(Sxx, axis=1), f[-1]/np.size(Sxx, axis=0))
-        #     #self.p1.setLimits(xMin=0, xMax=t[-1], yMin=0, yMax=f[-1])
+        if sampled_audio is not None:
+            fs = 44100
+
+            match self.freqBox.currentIndex():
+                case 0:
+                    fs = 181000
+                case 1:
+                    fs = 44100
+
+            audio_list = []
+
+            for i in range(9):
+                audio_list.append(sampled_audio.get())
+
+            #audio_data = np.fromstring(sampled_audio, np.int16)
+            audio_data = b''.join(audio_list)
+            audio_data = np.fromstring(audio_data, np.int16)
+
+            f, t, Sxx = signal.spectrogram(audio_data, fs)
+            if self.mesh is None:
+                self.mesh = self.ax.pcolormesh(t, f, Sxx, vmin=0, vmax=32767)
+                self.colorbar = self.figure.colorbar(self.mesh, ax=self.ax)
+                self.canvas.draw()
+
+            self.currentData = [t, f, Sxx]
+
+            # self.figure.clear()
+            # self.ax = self.figure.add_subplot(111)
+            # #self.ax.plot(audio_data)
+            # #self.ax.set_xlabel("Sample")
+            # self.ax.set_ylabel("Frequency [Hz]")
+            # self.ax.pcolormesh(t, f, Sxx)
+            # self.canvas.draw()

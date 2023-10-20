@@ -49,8 +49,10 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
     RATE = 44100
     match worker.window.freqBox.currentIndex():
         case 0:
-            RATE = 128000
+            RATE = 192000
         case 1:
+            RATE = 181000
+        case 2:
             RATE = 44100
 
     print("Sampling rate: {} Hz".format(RATE))

@@ -189,8 +189,10 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
             match self.freqBox.currentIndex():
                 case 0:
-                    fs = 181000
+                    fs = 192000
                 case 1:
+                    fs = 181000
+                case 2:
                     fs = 44100
 
             audio_list = []

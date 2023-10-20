@@ -359,6 +359,11 @@
     </property>
     <item>
      <property name="text">
+      <string>192 kHz</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
       <string>128 kHz</string>
      </property>
     </item>

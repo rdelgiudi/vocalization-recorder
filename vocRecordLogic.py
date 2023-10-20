@@ -72,6 +72,8 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
     selected_index_second = worker.window.audioComboBox_2.currentIndex()
     print("[DEBUG] Selected index second: {}".format(selected_index_second))
 
+    second_audio_disabled = worker.window.disableSecondBox.isChecked()
+
     for i in range(0, numdevices):
         if (audio.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             if (temp_iter == selected_index_first):
@@ -97,23 +99,24 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
                               #frames_per_buffer=CHUNK,
                               input_device_index=DEVICE_FIRST
                               )
-
-    stream_second = audio.open(format=FORMAT,
-                              channels=CHANNELS,
-                              rate=RATE,
-                              input=True,
-                              output=False,
-                              # frames_per_buffer=CHUNK,
-                              input_device_index=DEVICE_SECOND
-                              )
+    if not second_audio_disabled:
+        stream_second = audio.open(format=FORMAT,
+                                  channels=CHANNELS,
+                                  rate=RATE,
+                                  input=True,
+                                  output=False,
+                                  # frames_per_buffer=CHUNK,
+                                  input_device_index=DEVICE_SECOND
+                                  )
 
     first_wave_file.setnchannels(CHANNELS)
     first_wave_file.setsampwidth(audio.get_sample_size(FORMAT))
     first_wave_file.setframerate(RATE)
 
-    second_wave_file.setnchannels(CHANNELS)
-    second_wave_file.setsampwidth(audio.get_sample_size(FORMAT))
-    second_wave_file.setframerate(RATE)
+    if not second_audio_disabled:
+        second_wave_file.setnchannels(CHANNELS)
+        second_wave_file.setsampwidth(audio.get_sample_size(FORMAT))
+        second_wave_file.setframerate(RATE)
 
     while True:
         if not info_queue.empty():
@@ -123,17 +126,20 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
             if data == "DONE":
                 stream_first.stop_stream()
                 stream_first.close()
-                stream_second.stop_stream()
-                stream_second.close()
+                if not second_audio_disabled:
+                    stream_second.stop_stream()
+                    stream_second.close()
                 audio.terminate()
                 break
 
         audio_first = stream_first.read(CHUNK)
         data_queue.put(audio_first)
-        audio_second = stream_second.read(CHUNK)
+        if not second_audio_disabled:
+            audio_second = stream_second.read(CHUNK)
 
         first_data.append(audio_first)
-        second_data.append(audio_second)
+        if not second_audio_disabled:
+            second_data.append(audio_second)
 
 def progress_callback(progress):
     print(f'\rProgress  {progress}% ... ', end ="\r")
@@ -324,8 +330,11 @@ def recording(worker):
         first_wave_file.writeframes(b''.join(first_data))
         first_wave_file.close()
 
-        second_wave_file.writeframes(b''.join(second_data))
-        second_wave_file.close()
+        second_audio_disabled = worker.window.disableSecondBox.isChecked()
+
+        if not second_audio_disabled:
+            second_wave_file.writeframes(b''.join(second_data))
+            second_wave_file.close()
         #write(first_path, RATE, np.asarray(first_data).astype(np.int16))
 
         print("FPS: {:.2f}".format(fps))

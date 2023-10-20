@@ -130,6 +130,12 @@ class Ui_MainWindow(object):
         self.plotLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.plotLayout.setContentsMargins(0, 0, 0, 0)
         self.plotLayout.setObjectName("plotLayout")
+        self.disableSecondBox = QtWidgets.QCheckBox(self.centralwidget)
+        self.disableSecondBox.setGeometry(QtCore.QRect(540, 720, 161, 22))
+        font = QtGui.QFont()
+        font.setPointSize(9)
+        self.disableSecondBox.setFont(font)
+        self.disableSecondBox.setObjectName("disableSecondBox")
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
@@ -158,6 +164,7 @@ class Ui_MainWindow(object):
         self.freqLabel.setText(_translate("MainWindow", "Frequency:"))
         self.freqBox.setItemText(0, _translate("MainWindow", "128 kHz"))
         self.freqBox.setItemText(1, _translate("MainWindow", "44.1 kHz"))
+        self.disableSecondBox.setText(_translate("MainWindow", "Disable "))
 
 
 if __name__ == "__main__":

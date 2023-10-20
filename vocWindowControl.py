@@ -12,7 +12,7 @@ import vocWindowView, vocRecordLogic
 from scipy import signal
 import numpy as np
 
-import pyqtgraph
+#import pyqtgraph
 import pyaudio
 
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -52,6 +52,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.switchSourceButton.clicked.connect(self.switchSourceClicked)
         self.resolutionBox.currentIndexChanged.connect(self.resolutionBoxChanged)
         self.disparityShiftBox.valueChanged.connect(self.disparityShiftBoxChanged)
+        self.disableSecondBox.clicked.connect(self.disableSecondAudioDevice)
 
         self.isRecording = False
         self.showDepth = False
@@ -114,11 +115,20 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
         return super().closeEvent(a0)
 
+    def disableSecondAudioDevice(self):
+        checked = self.disableSecondBox.isChecked()
+
+        self.audioComboBox_2.setDisabled(checked)
+
     def startClicked(self):
         if not self.isRecording:
             self.anim.resume()
             self.isRecording = True
             self.startButton.setText("Stop")
+            self.disableSecondBox.setDisabled(True)
+            self.freqBox.setDisabled(True)
+            self.disparityShiftBox.setDisabled(True)
+            self.resolutionBox.setDisabled(True)
 
             if self.thread.isRunning():
                 self.thread.wait()
@@ -131,6 +141,10 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             self.isRecording = False
             self.errorLabel.setHidden(True)
             self.startButton.setText("Start")
+            self.disableSecondBox.setDisabled(False)
+            self.freqBox.setDisabled(False)
+            self.disparityShiftBox.setDisabled(False)
+            self.resolutionBox.setDisabled(False)
 
     def switchSourceClicked(self):
         if not self.showDepth:

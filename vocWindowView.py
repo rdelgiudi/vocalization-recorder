@@ -164,7 +164,7 @@ class Ui_MainWindow(object):
         self.audioLabel_2.setText(_translate("MainWindow", "Audio device 2:"))
         self.freqLabel.setText(_translate("MainWindow", "Frequency:"))
         self.freqBox.setItemText(0, _translate("MainWindow", "192 kHz"))
-        self.freqBox.setItemText(1, _translate("MainWindow", "128 kHz"))
+        self.freqBox.setItemText(1, _translate("MainWindow", "181 kHz"))
         self.freqBox.setItemText(2, _translate("MainWindow", "44.1 kHz"))
         self.disableSecondBox.setText(_translate("MainWindow", "Disable "))
 

@@ -159,6 +159,8 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             case 0:
                 self.dim = (848, 480)
             case 1:
+                self.dim = (640, 480)
+            case 2:
                 self.dim = (1280, 720)
 
     def disparityShiftBoxChanged(self):

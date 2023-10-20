@@ -17,7 +17,8 @@ from scipy.io.wavfile import write
 
 def processWQueue(colorwqueue, depthwqueue, dims):
 
-    dateandtime = datetime.datetime.today().isoformat("_", "seconds")
+    #dateandtime = datetime.datetime.today().isoformat("_", "seconds")
+    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
 
     output_dir = os.path.join(os.getcwd(), "videos")
 
@@ -57,7 +58,7 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
 
     print("Sampling rate: {} Hz".format(RATE))
 
-    CHUNK = 1024
+    CHUNK = 1024*4
     DEVICE_FIRST = 0
     DEVICE_SECOND = 0
 
@@ -107,7 +108,7 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
                                   rate=RATE,
                                   input=True,
                                   output=False,
-                                  # frames_per_buffer=CHUNK,
+                                  #frames_per_buffer=CHUNK,
                                   input_device_index=DEVICE_SECOND
                                   )
 
@@ -154,7 +155,8 @@ def recording(worker):
 
     second_audio_disabled = worker.window.disableSecondBox.isChecked()
 
-    dateandtime = datetime.datetime.today().isoformat("-", "seconds")
+    #dateandtime = datetime.datetime.today().isoformat("-", "seconds")
+    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
     output_dir = os.path.join(os.getcwd(), "videos")
     first_path = os.path.join(output_dir, "{}_first.wav".format(dateandtime))
     second_path = os.path.join(output_dir, "{}_second.wav".format(dateandtime))
@@ -188,16 +190,16 @@ def recording(worker):
         exit(0)
 
     # Set Disparity Shift
-    adv_mode = rs.rs400_advanced_mode(device)
-    depth_table_control_group = adv_mode.get_depth_table()
-    depth_table_control_group.disparityShift = worker.window.disparityShift
+    # adv_mode = rs.rs400_advanced_mode(device)
+    # depth_table_control_group = adv_mode.get_depth_table()
+    # depth_table_control_group.disparityShift = worker.window.disparityShift
 
     # Set colorizer settings
-    colorizer = rs.colorizer()
-    if worker.window.histogramBox.currentIndex() == 1:
-        colorizer.set_option(rs.option.histogram_equalization_enabled, 1)
-    else:
-        colorizer.set_option(rs.option.histogram_equalization_enabled, 0)
+    #colorizer = rs.colorizer()
+    # if worker.window.histogramBox.currentIndex() == 1:
+    #     colorizer.set_option(rs.option.histogram_equalization_enabled, 1)
+    # else:
+    #     colorizer.set_option(rs.option.histogram_equalization_enabled, 0)
 
     dims = worker.window.dim
 
@@ -213,6 +215,9 @@ def recording(worker):
     else:
         print(f"Folder {folder_name} already exists.")
 
+    align_to = rs.stream.color
+    align = rs.align(align_to)
+
     # Start streaming
     profile = pipeline.start(config)
 
@@ -223,9 +228,6 @@ def recording(worker):
         depth_sensor.set_option(rs.option.depth_units, 0.0001)
 
     depth_scale = depth_sensor.get_depth_scale()
-
-    align_to = rs.stream.color
-    align = rs.align(align_to)
 
     framenum = 0
     fps = 0

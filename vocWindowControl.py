@@ -1,3 +1,4 @@
+import os
 import time
 
 import matplotlib
@@ -97,22 +98,30 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.plotLayout.addWidget(self.canvas)
         self.currentData = None
         self.ax = self.figure.add_subplot()
-        self.ax.set_ylabel("Frequency [Hz]")
-        self.mesh = None
+        self.figure.supxlabel("Time [s]")
+        self.ax.set_ylabel("Volume")
+        #self.ax.set_ylabel("Frequency [Hz]")
+        self.line = None
 
         def animate(i):
             if self.currentData is not None:
-                self.mesh.set_array(self.currentData[2].flatten())
-                self.ax.draw_artist(self.mesh)
-                self.canvas.update()
-                self.canvas.flush_events()
-                self.canvas.draw()
+                audio_data = b''.join(self.currentData)
+                audio_data = np.fromstring(audio_data, np.int16)
+                self.line.set_ydata(audio_data)
+                #self.ax.draw_artist(self.mesh)
+                #self.canvas.update()
+                #self.canvas.flush_events()
+                #self.canvas.draw()
 
-        self.anim = matplotlib.animation.FuncAnimation(fig=self.figure, func=animate, interval=0, blit=False, repeat=False)
+        self.anim = matplotlib.animation.FuncAnimation(fig=self.figure, func=animate, interval=20, blit=False,
+                                                       repeat=False, cache_frame_data=False)
+        self.anim.pause()
 
     def closeEvent(self, a0: QCloseEvent) -> None:
-
         self.isRecording = False
+        self.anim = None
+        self.worker.deleteLater()
+        os._exit(1)
 
         return super().closeEvent(a0)
 
@@ -155,6 +164,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             self.freqBox.setDisabled(False)
             self.disparityShiftBox.setDisabled(False)
             self.resolutionBox.setDisabled(False)
+            self.thread.exit()
 
     def switchSourceClicked(self):
         if not self.showDepth:
@@ -210,26 +220,43 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
             audio_list = []
 
-            for i in range(9):
-                audio_list.append(sampled_audio.get())
+            if self.line is None and sampled_audio.qsize() > 10:
+                for i in range(9):
+                    if not sampled_audio.empty():
+                        audio_list.append(sampled_audio.get())
+
+                self.currentData = audio_list
+
+            elif self.line is not None:
+                for i in range(9):
+                    if not sampled_audio.empty():
+                        self.currentData.pop(0)
+                        self.currentData.append(sampled_audio.get())
+
+            else:
+                return
 
             #audio_data = np.fromstring(sampled_audio, np.int16)
-            audio_data = b''.join(audio_list)
+            audio_data = b''.join(self.currentData)
             audio_data = np.fromstring(audio_data, np.int16)
 
-            f, t, Sxx = signal.spectrogram(audio_data, fs)
+            #f, t, Sxx = signal.spectrogram(audio_data, fs)
 
             #frobenius_norm = np.linalg.norm(Sxx, 'nuc')
             #Sxx_float = Sxx.astype(np.float32)
 
             #Sxx_float = Sxx_float / frobenius_norm
 
-            if self.mesh is None:
-                self.mesh = self.ax.pcolormesh(t, f, Sxx, shading="gouraud")
-                self.colorbar = self.figure.colorbar(self.mesh, ax=self.ax)
-                self.canvas.draw()
+            if self.line is None:
+                #self.mesh = self.ax.pcolormesh(t, f, Sxx, shading="gouraud")
+                start = 0
+                end = (1 / fs) * len(audio_data)
+                x = np.linspace(start, end, num=len(audio_data))
+                self.line, = self.ax.plot(x, audio_data)
+                self.ax.set_ylim([-32768, 32768])
+                #self.colorbar = self.figure.colorbar(self.mesh, ax=self.ax)
 
-            self.currentData = [t, f, Sxx]
+            #self.currentData = [t, f, Sxx]
 
             # self.figure.clear()
             # self.ax = self.figure.add_subplot(111)

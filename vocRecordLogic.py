@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import time
 
 import pyrealsense2.pyrealsense2 as rs
@@ -15,10 +16,10 @@ import pyaudio
 import wave
 from scipy.io.wavfile import write
 
-def processWQueue(colorwqueue, depthwqueue, dims):
+def processWQueue(colorwqueue, depthwqueue, dims, dateandtime):
 
     #dateandtime = datetime.datetime.today().isoformat("_", "seconds")
-    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
+    #dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
 
     output_dir = os.path.join(os.getcwd(), "videos")
 
@@ -121,33 +122,36 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
         second_wave_file.setsampwidth(audio.get_sample_size(FORMAT))
         second_wave_file.setframerate(RATE)
 
-    while True:
-        if not info_queue.empty():
+    try:
+        while True:
+            if not info_queue.empty():
 
-            data = info_queue.get()
+                data = info_queue.get()
 
-            if data == "DONE":
-                stream_first.stop_stream()
-                stream_first.close()
-                if not second_audio_disabled:
-                    stream_second.stop_stream()
-                    stream_second.close()
-                audio.terminate()
-                break
+                if data == "DONE":
+                    break
 
-        audio_first = stream_first.read(CHUNK)
-        data_queue.put(audio_first)
+            audio_first = stream_first.read(CHUNK)
+            data_queue.put(audio_first)
+            if not second_audio_disabled:
+                audio_second = stream_second.read(CHUNK)
+
+            first_data.append(audio_first)
+            if not second_audio_disabled:
+                second_data.append(audio_second)
+
+    finally:
+        stream_first.stop_stream()
+        stream_first.close()
         if not second_audio_disabled:
-            audio_second = stream_second.read(CHUNK)
-
-        first_data.append(audio_first)
-        if not second_audio_disabled:
-            second_data.append(audio_second)
+            stream_second.stop_stream()
+            stream_second.close()
+        audio.terminate()
 
 def progress_callback(progress):
     print(f'\rProgress  {progress}% ... ', end ="\r")
 
-def config_video(worker):
+def config_video(worker, dateandtime):
 
     # Configure depth and color streams
     pipeline = rs.pipeline()
@@ -210,7 +214,7 @@ def config_video(worker):
     colorwqueue = Queue()
     depthwqueue = Queue()
 
-    writethread = Process(target=processWQueue, args=(colorwqueue, depthwqueue, dims))
+    writethread = Process(target=processWQueue, args=(colorwqueue, depthwqueue, dims, dateandtime))
     writethread.start()
 
     return pipeline, align, colorwqueue, depthwqueue, writethread
@@ -225,20 +229,25 @@ def recording(worker):
 
     disableVideo = worker.window.disableVideoBox.isChecked()
 
+    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
+
     if not disableVideo:
-        pipeline, align, colorwqueue, depthwqueue, writethread = config_video(worker)
+        pipeline, align, colorwqueue, depthwqueue, writethread = config_video(worker, dateandtime)
 
     second_audio_disabled = worker.window.disableSecondBox.isChecked()
 
     #dateandtime = datetime.datetime.today().isoformat("-", "seconds")
-    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
     output_dir = os.path.join(os.getcwd(), "videos")
     first_path = os.path.join(output_dir, "{}_first.wav".format(dateandtime))
     second_path = os.path.join(output_dir, "{}_second.wav".format(dateandtime))
 
     first_wave_file = wave.open(first_path, 'wb')
+
+    print("Saving first wave to file: {}".format(first_path))
+
     if not second_audio_disabled:
         second_wave_file = wave.open(second_path, 'wb')
+        print("Saving second wave to file: {}".format(second_path))
     else:
         second_wave_file = None
 
@@ -266,12 +275,13 @@ def recording(worker):
     first_data = []
     second_data = []
 
-    audio_write_thread = threading.Thread(target=processAWQueue, args=(worker, first_data, second_data,
-                                                                       first_wave_file, second_wave_file, info_queue, data_queue))
-    audio_write_thread.start()
-
     color_image = None
     depth_image_8U = None
+
+    audio_write_thread = threading.Thread(target=processAWQueue, args=(worker, first_data, second_data,
+                                                                       first_wave_file, second_wave_file, info_queue, data_queue))
+
+    audio_write_thread.start()
 
     try:
         while worker.window.isRecording:
@@ -331,7 +341,7 @@ def recording(worker):
 
             totalseconds = (currenttime - starttime).total_seconds()
 
-            if data_queue.qsize() > 10:
+            if not data_queue.empty():
                 worker.progress.emit(depth_image_8U, color_image, data_queue, fps, totalseconds)
             else:
                 worker.progress.emit(depth_image_8U, color_image, None, fps, totalseconds)
@@ -348,6 +358,8 @@ def recording(worker):
         info_queue.put("DONE")
         if not disableVideo:
             writethread.join()
+            colorwqueue.close()
+            depthwqueue.close()
 
         audio_write_thread.join()
 
@@ -355,8 +367,11 @@ def recording(worker):
         first_wave_file.close()
 
         if not second_audio_disabled:
-            second_wave_file.writeframes(b''.join(second_data))
-            second_wave_file.close()
+           second_wave_file.writeframes(b''.join(second_data))
+           second_wave_file.close()
+
+        data_queue.close()
+        info_queue.close()
 
         print("Done!")
 

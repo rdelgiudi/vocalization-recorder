@@ -147,25 +147,11 @@ def processAWQueue(worker, first_data, second_data, first_wave_file, second_wave
 def progress_callback(progress):
     print(f'\rProgress  {progress}% ... ', end ="\r")
 
-def recording(worker):
+def config_video(worker):
 
     # Configure depth and color streams
     pipeline = rs.pipeline()
     config = rs.config()
-
-    second_audio_disabled = worker.window.disableSecondBox.isChecked()
-
-    #dateandtime = datetime.datetime.today().isoformat("-", "seconds")
-    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
-    output_dir = os.path.join(os.getcwd(), "videos")
-    first_path = os.path.join(output_dir, "{}_first.wav".format(dateandtime))
-    second_path = os.path.join(output_dir, "{}_second.wav".format(dateandtime))
-
-    first_wave_file = wave.open(first_path, 'wb')
-    if not second_audio_disabled:
-        second_wave_file = wave.open(second_path, 'wb')
-    else:
-        second_wave_file = None
 
     # Get device product line for setting a supporting resolution
     pipeline_wrapper = rs.pipeline_wrapper(pipeline)
@@ -207,14 +193,6 @@ def recording(worker):
     config.enable_stream(rs.stream.depth, dims[0], dims[1], rs.format.z16, 30)
     config.enable_stream(rs.stream.color, dims[0], dims[1], rs.format.bgr8, 30)
 
-    # create output folder if it doesn't exist
-    folder_name = "videos"
-    if not os.path.exists(folder_name):
-        os.mkdir(folder_name)
-        print(f"Folder {folder_name} created successfully!")
-    else:
-        print(f"Folder {folder_name} already exists.")
-
     align_to = rs.stream.color
     align = rs.align(align_to)
 
@@ -224,10 +202,53 @@ def recording(worker):
     depth_sensor = profile.get_device().first_depth_sensor()
 
     # Depth unit, set to equivalent of 100 in RealSense Viewer
-    if depth_sensor.supports(rs.option.depth_units):
-        depth_sensor.set_option(rs.option.depth_units, 0.0001)
+    #if depth_sensor.supports(rs.option.depth_units):
+    #    depth_sensor.set_option(rs.option.depth_units, 0.0001)
 
-    depth_scale = depth_sensor.get_depth_scale()
+    #depth_scale = depth_sensor.get_depth_scale()
+
+    colorwqueue = Queue()
+    depthwqueue = Queue()
+
+    writethread = Process(target=processWQueue, args=(colorwqueue, depthwqueue, dims))
+    writethread.start()
+
+    return pipeline, align, colorwqueue, depthwqueue, writethread
+
+def recording(worker):
+
+    pipeline = None
+    align = None
+    colorwqueue = None
+    depthwqueue = None
+    writethread = None
+
+    disableVideo = worker.window.disableVideoBox.isChecked()
+
+    if not disableVideo:
+        pipeline, align, colorwqueue, depthwqueue, writethread = config_video(worker)
+
+    second_audio_disabled = worker.window.disableSecondBox.isChecked()
+
+    #dateandtime = datetime.datetime.today().isoformat("-", "seconds")
+    dateandtime = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
+    output_dir = os.path.join(os.getcwd(), "videos")
+    first_path = os.path.join(output_dir, "{}_first.wav".format(dateandtime))
+    second_path = os.path.join(output_dir, "{}_second.wav".format(dateandtime))
+
+    first_wave_file = wave.open(first_path, 'wb')
+    if not second_audio_disabled:
+        second_wave_file = wave.open(second_path, 'wb')
+    else:
+        second_wave_file = None
+
+    # create output folder if it doesn't exist
+    folder_name = "videos"
+    if not os.path.exists(folder_name):
+        os.mkdir(folder_name)
+        print(f"Folder {folder_name} created successfully!")
+    else:
+        print(f"Folder {folder_name} already exists.")
 
     framenum = 0
     fps = 0
@@ -240,12 +261,6 @@ def recording(worker):
     #writetimes = []
     #updateuitimes = []
 
-    colorwqueue = Queue()
-    depthwqueue = Queue()
-
-    writethread = Process(target=processWQueue, args=(colorwqueue, depthwqueue, dims))
-    writethread.start()
-
     info_queue = Queue()
     data_queue = Queue()
     first_data = []
@@ -255,85 +270,85 @@ def recording(worker):
                                                                        first_wave_file, second_wave_file, info_queue, data_queue))
     audio_write_thread.start()
 
+    color_image = None
+    depth_image_8U = None
+
     try:
         while worker.window.isRecording:
 
             #if not worker.window.isRecording:
             #    break
 
-            if (datetime.datetime.now()-fpstime).total_seconds() > 5:
-                framenum = 0
-                fpstime = datetime.datetime.now()
+            if not disableVideo:
+                if (datetime.datetime.now()-fpstime).total_seconds() > 5:
+                    framenum = 0
+                    fpstime = datetime.datetime.now()
 
-            # Wait for a coherent pair of frames: depth and color
-            capturestart = datetime.datetime.now()
-            frames = pipeline.wait_for_frames()
-            #info_queue.put("OK")
+                # Wait for a coherent pair of frames: depth and color
+                capturestart = datetime.datetime.now()
+                frames = pipeline.wait_for_frames()
 
-            capturened = datetime.datetime.now()
-            capturetimes.append((capturened - capturestart).total_seconds())
+                capturened = datetime.datetime.now()
+                capturetimes.append((capturened - capturestart).total_seconds())
 
-            alignstart = datetime.datetime.now()
-            aligned_frames = align.process(frames)
-            alignend = datetime.datetime.now()
-            aligntimes.append((alignend - alignstart).total_seconds())
+                alignstart = datetime.datetime.now()
+                aligned_frames = align.process(frames)
+                alignend = datetime.datetime.now()
+                aligntimes.append((alignend - alignstart).total_seconds())
 
-            depth_frame = aligned_frames.get_depth_frame()
-            color_frame = aligned_frames.get_color_frame()
+                depth_frame = aligned_frames.get_depth_frame()
+                color_frame = aligned_frames.get_color_frame()
 
-            if not depth_frame or not color_frame:
-                continue
+                if not depth_frame or not color_frame:
+                    continue
 
-            # Filters (comment in and out for best effect)
-            #depth_frame = rs.hole_filling_filter().process(depth_frame)
-            #depth_frame = colorizer.colorize(depth_frame)
+                # Filters (comment in and out for best effect)
+                #depth_frame = rs.hole_filling_filter().process(depth_frame)
+                #depth_frame = colorizer.colorize(depth_frame)
 
-            numpystart = datetime.datetime.now()
-            depth_image = np.asanyarray(depth_frame.get_data())
-            color_image = np.asanyarray(color_frame.get_data())
-            depth_image_8U = cv2.convertScaleAbs(depth_image, alpha=0.03)
+                numpystart = datetime.datetime.now()
+                depth_image = np.asanyarray(depth_frame.get_data())
+                color_image = np.asanyarray(color_frame.get_data())
+                depth_image_8U = cv2.convertScaleAbs(depth_image, alpha=0.03)
 
-            # Built in opencv histogram equalization
-            if worker.window.histogramBox.currentIndex() == 2:
-                depth_image_8U = cv2.equalizeHist(depth_image_8U)
+                # Built in opencv histogram equalization
+                if worker.window.histogramBox.currentIndex() == 2:
+                    depth_image_8U = cv2.equalizeHist(depth_image_8U)
 
-            numpyend = datetime.datetime.now()
-            numpytimes.append((numpyend - numpystart).total_seconds())
+                numpyend = datetime.datetime.now()
+                numpytimes.append((numpyend - numpystart).total_seconds())
 
-            #writestart = datetime.datetime.now()
-            #colorwriter.write(color_image)
-            #depthwriter.write(depth_image_8U)
-            colorwqueue.put(color_image)
-            depthwqueue.put(depth_image_8U)
-            #writeend = datetime.datetime.now()
-            #writetimes.append((writeend - writestart).total_seconds())
+                colorwqueue.put(color_image)
+                depthwqueue.put(depth_image_8U)
 
-            #updateuistart = datetime.datetime.now()
-            framenum += 1
-            currenttime = datetime.datetime.now()
+                framenum += 1
+                currenttime = datetime.datetime.now()
+                fpsseconds = (currenttime - fpstime).total_seconds()
+                fps = framenum / fpsseconds
+            else:
+                time.sleep(0.01)
+                currenttime = datetime.datetime.now()
+
             totalseconds = (currenttime - starttime).total_seconds()
-            fpsseconds = (currenttime - fpstime).total_seconds()
-            fps = framenum / fpsseconds
 
-            #Thread(target=updateUi, args=(window, depth_image_8U, color_image, fps, totalseconds)).start()
-            #updateUi(window, depth_image_8U, color_image, fps, totalseconds)
             if data_queue.qsize() > 10:
                 worker.progress.emit(depth_image_8U, color_image, data_queue, fps, totalseconds)
             else:
                 worker.progress.emit(depth_image_8U, color_image, None, fps, totalseconds)
-            #updateuiend = datetime.datetime.now()    # Wait for the reader and writer threads to exit
-            #updateuitimes.append((updateuiend - updateuistart).total_seconds())
 
     finally:
         print("Waiting for writing process to finish...")
 
         # Stop streaming
-        pipeline.stop()
+        if not disableVideo:
+            pipeline.stop()
+            colorwqueue.put("DONE")
+            depthwqueue.put("DONE")
 
-        colorwqueue.put("DONE")
-        depthwqueue.put("DONE")
         info_queue.put("DONE")
-        writethread.join()
+        if not disableVideo:
+            writethread.join()
+
         audio_write_thread.join()
 
         first_wave_file.writeframes(b''.join(first_data))
@@ -342,21 +357,19 @@ def recording(worker):
         if not second_audio_disabled:
             second_wave_file.writeframes(b''.join(second_data))
             second_wave_file.close()
-        #write(first_path, RATE, np.asarray(first_data).astype(np.int16))
 
-        print("FPS: {:.2f}".format(fps))
-        print("Operation Times:")
-        captureavg = sum(capturetimes) / len(capturetimes)
-        alignavg = sum(aligntimes) / len(aligntimes)
-        numpyavg = sum(numpytimes) / len(numpytimes)
-        #writeavg = sum(writetimes) / len(writetimes)
-        #updateuiavg = sum(updateuitimes) / len(updateuitimes)
+        print("Done!")
 
-        print("Capture {} ms".format(captureavg * 1000))
-        print("Align: {} ms".format(alignavg * 1000))
-        print("Numpy: {} ms".format(numpyavg * 1000))
-        #print("Write: {} ms".format(writeavg * 1000))
-        #print("Update UI: {} ms".format(updateuiavg * 1000))
+        if not disableVideo:
+            print("FPS: {:.2f}".format(fps))
+            print("Operation Times:")
+            captureavg = sum(capturetimes) / len(capturetimes)
+            alignavg = sum(aligntimes) / len(aligntimes)
+            numpyavg = sum(numpytimes) / len(numpytimes)
+
+            print("Capture {} ms".format(captureavg * 1000))
+            print("Align: {} ms".format(alignavg * 1000))
+            print("Numpy: {} ms".format(numpyavg * 1000))
 
 
 

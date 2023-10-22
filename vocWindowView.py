@@ -138,6 +138,12 @@ class Ui_MainWindow(object):
         font.setPointSize(9)
         self.disableSecondBox.setFont(font)
         self.disableSecondBox.setObjectName("disableSecondBox")
+        self.disableVideoBox = QtWidgets.QCheckBox(self.centralwidget)
+        self.disableVideoBox.setGeometry(QtCore.QRect(10, 580, 161, 22))
+        font = QtGui.QFont()
+        font.setPointSize(9)
+        self.disableVideoBox.setFont(font)
+        self.disableVideoBox.setObjectName("disableVideoBox")
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
@@ -169,6 +175,7 @@ class Ui_MainWindow(object):
         self.freqBox.setItemText(1, _translate("MainWindow", "181 kHz"))
         self.freqBox.setItemText(2, _translate("MainWindow", "44.1 kHz"))
         self.disableSecondBox.setText(_translate("MainWindow", "Disable "))
+        self.disableVideoBox.setText(_translate("MainWindow", "Disable Video"))
 
 
 if __name__ == "__main__":

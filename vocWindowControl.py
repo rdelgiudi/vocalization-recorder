@@ -53,6 +53,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.resolutionBox.currentIndexChanged.connect(self.resolutionBoxChanged)
         self.disparityShiftBox.valueChanged.connect(self.disparityShiftBoxChanged)
         self.disableSecondBox.clicked.connect(self.disableSecondAudioDevice)
+        self.disableVideoBox.clicked.connect(self.disableVideo)
 
         self.isRecording = False
         self.showDepth = False
@@ -101,7 +102,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
         def animate(i):
             if self.currentData is not None:
-                self.mesh.set_array(self.currentData[2].ravel())
+                self.mesh.set_array(self.currentData[2].flatten())
                 self.ax.draw_artist(self.mesh)
                 self.canvas.update()
                 self.canvas.flush_events()
@@ -119,6 +120,15 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         checked = self.disableSecondBox.isChecked()
 
         self.audioComboBox_2.setDisabled(checked)
+
+    def disableVideo(self):
+
+        disableVideoChecked = self.disableVideoBox.isChecked()
+        self.resolutionBox.setDisabled(disableVideoChecked)
+        self.switchSourceButton.setDisabled(disableVideoChecked)
+        self.histogramBox.setDisabled(disableVideoChecked)
+        self.disparityShiftBox.setDisabled(disableVideoChecked)
+
 
     def startClicked(self):
         if not self.isRecording:
@@ -168,22 +178,23 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
     def updateUi(self, depth_image_8U, color_image, sampled_audio, fps, totalseconds):
 
-        if self.showDepth:
-            qtimg = depth_image_8U
-            height, width = qtimg.shape
-            bytesPerLine = width
-            qImg = QImage(qtimg.data, width, height, bytesPerLine, QImage.Format_Grayscale8)
-        else:
-            qtimg = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-            height, width, channel = qtimg.shape
-            bytesPerLine = 3 * width
-            qImg = QImage(qtimg.data, width, height, bytesPerLine, QImage.Format_RGB888)
+        if not self.disableVideoBox.isChecked():
+            qImg = None
+            if self.showDepth:
+                qtimg = depth_image_8U
+                height, width = qtimg.shape
+                bytesPerLine = width
+                qImg = QImage(qtimg.data, width, height, bytesPerLine, QImage.Format_Grayscale8)
+            else:
+                qtimg = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+                height, width, channel = qtimg.shape
+                bytesPerLine = 3 * width
+                qImg = QImage(qtimg.data, width, height, bytesPerLine, QImage.Format_RGB888)
 
-        pixmap01 = QPixmap.fromImage(qImg)
+            pixmap01 = QPixmap.fromImage(qImg)
+            self.viewLabel.setPixmap(pixmap01.scaled(960, 540, Qt.KeepAspectRatio))
+            self.fpsValLabel.setText("{:.2f}".format(fps))
 
-        self.viewLabel.setPixmap(pixmap01.scaled(960, 540, Qt.KeepAspectRatio))
-
-        self.fpsValLabel.setText("{:.2f}".format(fps))
         self.timeValLabel.setText(str(datetime.timedelta(seconds=totalseconds)))
 
         if sampled_audio is not None:
@@ -207,8 +218,14 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             audio_data = np.fromstring(audio_data, np.int16)
 
             f, t, Sxx = signal.spectrogram(audio_data, fs)
+
+            #frobenius_norm = np.linalg.norm(Sxx, 'nuc')
+            #Sxx_float = Sxx.astype(np.float32)
+
+            #Sxx_float = Sxx_float / frobenius_norm
+
             if self.mesh is None:
-                self.mesh = self.ax.pcolormesh(t, f, Sxx, vmin=0, vmax=32767)
+                self.mesh = self.ax.pcolormesh(t, f, Sxx, shading="gouraud")
                 self.colorbar = self.figure.colorbar(self.mesh, ax=self.ax)
                 self.canvas.draw()
 

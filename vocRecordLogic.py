@@ -115,6 +115,7 @@ def config_video(worker, date_and_time):
 
 def process_audio_queue(worker, first_data, second_data, first_wave_file, second_wave_file, info_queue, data_queue):
     global frame_captured, num_samples
+    frame_captured = False
     num_samples = 0
 
     FORMAT = pyaudio.paInt16  # We use 16bit format per sample
@@ -191,7 +192,7 @@ def process_audio_queue(worker, first_data, second_data, first_wave_file, second
 
                 if data == "DONE":
                     break
-            if frame_captured:
+            if frame_captured or worker.window.disableVideoBox.isChecked():
                 audio_first = stream_first.read(CHUNK)
                 data_queue.put(audio_first)
                 if not second_audio_disabled:
@@ -220,6 +221,7 @@ def recording(worker):
 
     global frame_captured, num_samples
     frame_captured = False
+    num_samples = 0
 
     pipeline = None
     align = None

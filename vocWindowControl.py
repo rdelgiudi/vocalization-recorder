@@ -1,29 +1,24 @@
 import os
-import time
+import typing
+import datetime
 
-import matplotlib
+import numpy as np
+import pyaudio
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from threading import Thread
-import typing, datetime
 
-import vocWindowView, vocRecordLogic
-
-from scipy import signal
-import numpy as np
-
-#import pyqtgraph
-import pyaudio
-
-from matplotlib.backends.backend_qt5agg import FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import matplotlib
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 import matplotlib.animation
 matplotlib.use('Qt5Agg')
 
 import cv2
 
+import vocWindowView
+import vocRecordLogic
 
 class Worker(QObject):
     finished = pyqtSignal()
@@ -37,7 +32,6 @@ class Worker(QObject):
         vocRecordLogic.recording(self)
         self.finished.emit()
 
-
 class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
     def __init__(self, app, parent=None):
@@ -49,17 +43,19 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.errorLabel.setHidden(True)
         self.histogramBox.setCurrentIndex(2)
 
-        self.startButton.clicked.connect(self.startClicked)
-        self.switchSourceButton.clicked.connect(self.switchSourceClicked)
-        self.resolutionBox.currentIndexChanged.connect(self.resolutionBoxChanged)
-        self.disparityShiftBox.valueChanged.connect(self.disparityShiftBoxChanged)
-        self.disableSecondBox.clicked.connect(self.disableSecondAudioDevice)
-        self.disableVideoBox.clicked.connect(self.disableVideo)
+        self.startButton.clicked.connect(self.start_clicked)
+        self.switchSourceButton.clicked.connect(self.switch_source_clicked)
+        self.resolutionBox.currentIndexChanged.connect(self.resolution_box_changed)
+        self.disparityShiftBox.valueChanged.connect(self.disparity_shift_box_changed)
+        self.disableSecondBox.clicked.connect(self.disable_second_audio_device)
+        self.disableVideoBox.clicked.connect(self.disable_video)
+        self.freqBox.currentIndexChanged.connect(self.change_fs)
 
         self.isRecording = False
         self.showDepth = False
         self.disparityShift = 0
         self.dim = (848, 480)
+        self.fs = 192000
 
         self.thread = QThread()
         self.worker = Worker(window=self)
@@ -68,7 +64,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.worker.finished.connect(self.thread.quit)
         # self.worker.finished.connect(self.worker.deleteLater)
         # self.thread.finished.connect(self.thread.deleteLater)
-        self.worker.progress.connect(self.updateUi)
+        self.worker.progress.connect(self.update_ui)
 
         p = pyaudio.PyAudio()
         info = p.get_host_api_info_by_index(0)
@@ -82,36 +78,20 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
         p.terminate()
 
-        # pyqtgraph.setConfigOptions(imageAxisOrder='row-major')
-        # self.p1 = self.spectogram.addPlot()
-        # self.img = pyqtgraph.ImageItem()
-        # self.p1.addItem(self.img)
-        #
-        # self.hist = pyqtgraph.HistogramLUTItem()
-        # self.hist.setImageItem(self.img)
-        # self.spectogram.addItem(self.hist)
-        #
-        # self.p1.setLabel('bottom', "Time", units='s')
-        # self.p1.setLabel('left', "Frequency", units='Hz')
         self.figure = plt.figure()
         self.canvas = FigureCanvas(self.figure)
         self.plotLayout.addWidget(self.canvas)
-        self.currentData = None
+        self.current_data = None
         self.ax = self.figure.add_subplot()
         self.figure.supxlabel("Time [s]")
-        self.ax.set_ylabel("Volume")
-        #self.ax.set_ylabel("Frequency [Hz]")
+        self.ax.set_ylabel("Intensity")
         self.line = None
 
         def animate(i):
-            if self.currentData is not None:
-                audio_data = b''.join(self.currentData)
+            if self.current_data is not None:
+                audio_data = b''.join(self.current_data)
                 audio_data = np.fromstring(audio_data, np.int16)
                 self.line.set_ydata(audio_data)
-                #self.ax.draw_artist(self.mesh)
-                #self.canvas.update()
-                #self.canvas.flush_events()
-                #self.canvas.draw()
 
         self.anim = matplotlib.animation.FuncAnimation(fig=self.figure, func=animate, interval=20, blit=False,
                                                        repeat=False, cache_frame_data=False)
@@ -121,25 +101,31 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         self.isRecording = False
         self.anim = None
         self.worker.deleteLater()
-        os._exit(1)
+        #os._exit(1)
 
         return super().closeEvent(a0)
-
-    def disableSecondAudioDevice(self):
+    def disable_second_audio_device(self):
         checked = self.disableSecondBox.isChecked()
 
         self.audioComboBox_2.setDisabled(checked)
 
-    def disableVideo(self):
+    def change_fs(self):
+        match self.freqBox.currentIndex():
+            case 0:
+                self.fs = 192000
+            case 1:
+                self.fs = 181000
+            case 2:
+                self.fs = 44100
 
-        disableVideoChecked = self.disableVideoBox.isChecked()
-        self.resolutionBox.setDisabled(disableVideoChecked)
-        self.switchSourceButton.setDisabled(disableVideoChecked)
-        self.histogramBox.setDisabled(disableVideoChecked)
-        self.disparityShiftBox.setDisabled(disableVideoChecked)
+    def disable_video(self):
+        disable_video_checked = self.disableVideoBox.isChecked()
+        self.resolutionBox.setDisabled(disable_video_checked)
+        self.switchSourceButton.setDisabled(disable_video_checked)
+        self.histogramBox.setDisabled(disable_video_checked)
+        self.disparityShiftBox.setDisabled(disable_video_checked)
 
-
-    def startClicked(self):
+    def start_clicked(self):
         if not self.isRecording:
             self.anim.resume()
             self.isRecording = True
@@ -151,10 +137,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
             if self.thread.isRunning():
                 self.thread.wait()
-
             self.thread.start()
-
-            # recordlogic.recording(self)
         else:
             self.anim.pause()
             self.isRecording = False
@@ -166,7 +149,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             self.resolutionBox.setDisabled(False)
             self.thread.exit()
 
-    def switchSourceClicked(self):
+    def switch_source_clicked(self):
         if not self.showDepth:
             self.showDepth = True
             self.switchSourceButton.setText("Depth")
@@ -174,7 +157,7 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             self.showDepth = False
             self.switchSourceButton.setText("Color")
 
-    def resolutionBoxChanged(self):
+    def resolution_box_changed(self):
         match self.resolutionBox.currentIndex():
             case 0:
                 self.dim = (848, 480)
@@ -183,41 +166,31 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
             case 2:
                 self.dim = (1280, 720)
 
-    def disparityShiftBoxChanged(self):
+    def disparity_shift_box_changed(self):
         self.disparityShift = self.disparityShiftBox.value()
 
-    def updateUi(self, depth_image_8U, color_image, sampled_audio, fps, totalseconds):
+    def update_ui(self, depth_image_8U, color_image, sampled_audio, fps, total_seconds):
 
         if not self.disableVideoBox.isChecked():
             qImg = None
             if self.showDepth:
-                qtimg = depth_image_8U
-                height, width = qtimg.shape
-                bytesPerLine = width
-                qImg = QImage(qtimg.data, width, height, bytesPerLine, QImage.Format_Grayscale8)
+                qt_img = depth_image_8U
+                height, width = qt_img.shape
+                bytes_per_line = width
+                qImg = QImage(qt_img.data, width, height, bytes_per_line, QImage.Format_Grayscale8)
             else:
-                qtimg = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-                height, width, channel = qtimg.shape
-                bytesPerLine = 3 * width
-                qImg = QImage(qtimg.data, width, height, bytesPerLine, QImage.Format_RGB888)
+                qt_img = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+                height, width, channel = qt_img.shape
+                bytes_per_line = 3 * width
+                qImg = QImage(qt_img.data, width, height, bytes_per_line, QImage.Format_RGB888)
 
             pixmap01 = QPixmap.fromImage(qImg)
             self.viewLabel.setPixmap(pixmap01.scaled(960, 540, Qt.KeepAspectRatio))
             self.fpsValLabel.setText("{:.2f}".format(fps))
 
-        self.timeValLabel.setText(str(datetime.timedelta(seconds=totalseconds)))
+        self.timeValLabel.setText(str(datetime.timedelta(seconds=total_seconds)))
 
         if sampled_audio is not None:
-            fs = 44100
-
-            match self.freqBox.currentIndex():
-                case 0:
-                    fs = 192000
-                case 1:
-                    fs = 181000
-                case 2:
-                    fs = 44100
-
             audio_list = []
 
             if self.line is None and sampled_audio.qsize() > 10:
@@ -225,43 +198,23 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
                     if not sampled_audio.empty():
                         audio_list.append(sampled_audio.get())
 
-                self.currentData = audio_list
+                self.current_data = audio_list
 
             elif self.line is not None:
                 for i in range(9):
                     if not sampled_audio.empty():
-                        self.currentData.pop(0)
-                        self.currentData.append(sampled_audio.get())
+                        self.current_data.pop(0)
+                        self.current_data.append(sampled_audio.get())
 
             else:
                 return
 
-            #audio_data = np.fromstring(sampled_audio, np.int16)
-            audio_data = b''.join(self.currentData)
+            audio_data = b''.join(self.current_data)
             audio_data = np.fromstring(audio_data, np.int16)
 
-            #f, t, Sxx = signal.spectrogram(audio_data, fs)
-
-            #frobenius_norm = np.linalg.norm(Sxx, 'nuc')
-            #Sxx_float = Sxx.astype(np.float32)
-
-            #Sxx_float = Sxx_float / frobenius_norm
-
             if self.line is None:
-                #self.mesh = self.ax.pcolormesh(t, f, Sxx, shading="gouraud")
                 start = 0
-                end = (1 / fs) * len(audio_data)
+                end = (1 / self.fs) * len(audio_data)
                 x = np.linspace(start, end, num=len(audio_data))
                 self.line, = self.ax.plot(x, audio_data)
                 self.ax.set_ylim([-32768, 32768])
-                #self.colorbar = self.figure.colorbar(self.mesh, ax=self.ax)
-
-            #self.currentData = [t, f, Sxx]
-
-            # self.figure.clear()
-            # self.ax = self.figure.add_subplot(111)
-            # #self.ax.plot(audio_data)
-            # #self.ax.set_xlabel("Sample")
-            # self.ax.set_ylabel("Frequency [Hz]")
-            # self.ax.pcolormesh(t, f, Sxx)
-            # self.canvas.draw()

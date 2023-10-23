@@ -5,7 +5,7 @@ import matplotlib
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from threading import Thread
+import threading
 import typing, datetime
 
 import vocWindowView, vocRecordLogic
@@ -105,8 +105,12 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
 
         def animate(i):
             if self.currentData is not None:
+                lock = threading.Lock()
+
+                lock.acquire()
                 audio_data = b''.join(self.currentData)
                 audio_data = np.fromstring(audio_data, np.int16)
+                lock.release()
                 self.line.set_ydata(audio_data)
                 #self.ax.draw_artist(self.mesh)
                 #self.canvas.update()
@@ -219,19 +223,23 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
                     fs = 44100
 
             audio_list = []
+            lock = threading.Lock()
 
-            if self.line is None and sampled_audio.qsize() > 10:
-                for i in range(9):
+            if self.line is None and sampled_audio.qsize() > 100:
+                for i in range(30):
                     if not sampled_audio.empty():
                         audio_list.append(sampled_audio.get())
-
+                lock.acquire()
                 self.currentData = audio_list
+                lock.release()
 
             elif self.line is not None:
-                for i in range(9):
+                for i in range(30):
                     if not sampled_audio.empty():
+                        lock.acquire()
                         self.currentData.pop(0)
                         self.currentData.append(sampled_audio.get())
+                        lock.release()
 
             else:
                 return

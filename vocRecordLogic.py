@@ -114,8 +114,9 @@ def config_video(worker, date_and_time):
     return pipeline, align, color_queue, depth_queue, write_thread
 
 
-def record_audio_from_stream(stream, chunk, info_queue, worker, data_queue, data, write_samples):
-    global num_samples
+def record_audio_from_stream(stream, chunk, info_queue, worker, data_queue, data, ready_queue, write_samples):
+    global num_samples, signal
+    signal = False
     num_samples = 0
     try:
         while True:
@@ -123,15 +124,17 @@ def record_audio_from_stream(stream, chunk, info_queue, worker, data_queue, data
                 info = info_queue.get()
                 if info == "DONE":
                     break
-            if frame_captured or worker.window.disableVideoBox.isChecked():
+            if frame_captured or worker.window.disableVideoBox.isChecked() and signal:
                 audio = stream.read(chunk)
 
                 data.append(audio)
                 if write_samples:
                     data_queue.put(audio)
                     num_samples += chunk
+
+                ready_queue.put("RDY")
             else:
-                time.sleep(0.01)
+                time.sleep(0.00001)
 
     finally:
         stream.stop_stream()
@@ -140,9 +143,10 @@ def record_audio_from_stream(stream, chunk, info_queue, worker, data_queue, data
 
 
 def process_audio_queue(worker, first_data, second_data, first_wave_file, second_wave_file, info_queue, data_queue):
-    global frame_captured, num_samples
+    global frame_captured, num_samples, signal
     frame_captured = False
     num_samples = 0
+    signal = False
 
     FORMAT = pyaudio.paInt16  # We use 16bit format per sample
     CHANNELS = 2
@@ -211,14 +215,16 @@ def process_audio_queue(worker, first_data, second_data, first_wave_file, second
         second_wave_file.setframerate(RATE)
 
         info_queue_thread_second = Queue()
+        ready_queue_second = Queue()
         thread_stream_second = threading.Thread(target=record_audio_from_stream,
                                                 args=(stream_second, CHUNK, info_queue_thread_second, worker, None,
-                                                     second_data, False))
+                                                     second_data, ready_queue_second, False))
 
     info_queue_thread_first = Queue()
+    ready_queue_first = Queue()
     thread_stream_first = threading.Thread(target=record_audio_from_stream,
                                            args=(stream_first, CHUNK, info_queue_thread_first, worker, data_queue,
-                                                 first_data, True))
+                                                 first_data, ready_queue_first, True))
 
     thread_stream_first.start()
     if not second_audio_disabled:
@@ -263,8 +269,16 @@ def process_audio_queue(worker, first_data, second_data, first_wave_file, second
                     if not second_audio_disabled:
                         info_queue_thread_second.put(data)
                     break
+            elif not ready_queue_first.empty():
+                if not second_audio_disabled and ready_queue_second.empty():
+                    continue
+                elif second_audio_disabled:
+                    ready_queue_second.get()
+                signal = True
+                ready_queue_first.get()
             else:
-                time.sleep(0.001)
+                time.sleep(CHUNK / (worker.window.fs*2))
+                signal = False
     finally:
         thread_stream_first.join()
         if not second_audio_disabled:

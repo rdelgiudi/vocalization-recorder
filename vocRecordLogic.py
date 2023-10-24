@@ -113,6 +113,32 @@ def config_video(worker, date_and_time):
 
     return pipeline, align, color_queue, depth_queue, write_thread
 
+
+def record_audio_from_stream(stream, chunk, info_queue, worker, data_queue, data, write_samples):
+    global num_samples
+    num_samples = 0
+    try:
+        while True:
+            if not info_queue.empty():
+                info = info_queue.get()
+                if info == "DONE":
+                    break
+            if frame_captured or worker.window.disableVideoBox.isChecked():
+                audio = stream.read(chunk)
+
+                data.append(audio)
+                if write_samples:
+                    data_queue.put(audio)
+                    num_samples += chunk
+            else:
+                time.sleep(0.01)
+
+    finally:
+        stream.stop_stream()
+        stream.close()
+
+
+
 def process_audio_queue(worker, first_data, second_data, first_wave_file, second_wave_file, info_queue, data_queue):
     global frame_captured, num_samples
     frame_captured = False
@@ -184,36 +210,65 @@ def process_audio_queue(worker, first_data, second_data, first_wave_file, second
         second_wave_file.setsampwidth(audio.get_sample_size(FORMAT))
         second_wave_file.setframerate(RATE)
 
+        info_queue_thread_second = Queue()
+        thread_stream_second = threading.Thread(target=record_audio_from_stream,
+                                                args=(stream_second, CHUNK, info_queue_thread_second, worker, None,
+                                                     second_data, False))
+
+    info_queue_thread_first = Queue()
+    thread_stream_first = threading.Thread(target=record_audio_from_stream,
+                                           args=(stream_first, CHUNK, info_queue_thread_first, worker, data_queue,
+                                                 first_data, True))
+
+    thread_stream_first.start()
+    if not second_audio_disabled:
+        thread_stream_second.start()
+
+    # try:
+    #     while True:
+    #         if not info_queue.empty():
+    #
+    #             data = info_queue.get()
+    #
+    #             if data == "DONE":
+    #                 break
+    #         if frame_captured or worker.window.disableVideoBox.isChecked():
+    #             audio_first = stream_first.read(CHUNK)
+    #             data_queue.put(audio_first)
+    #             if not second_audio_disabled:
+    #                 audio_second = stream_second.read(CHUNK)
+    #
+    #             first_data.append(audio_first)
+    #             if not second_audio_disabled:
+    #                 second_data.append(audio_second)
+    #
+    #             num_samples += CHUNK
+    #         else:
+    #             time.sleep(0.01)
+    #
+    # finally:
+    #     stream_first.stop_stream()
+    #     stream_first.close()
+    #
+    #     if not second_audio_disabled:
+    #         stream_second.stop_stream()
+    #         stream_second.close()
+
     try:
         while True:
             if not info_queue.empty():
-
                 data = info_queue.get()
-
                 if data == "DONE":
+                    info_queue_thread_first.put(data)
+                    if not second_audio_disabled:
+                        info_queue_thread_second.put(data)
                     break
-            if frame_captured or worker.window.disableVideoBox.isChecked():
-                audio_first = stream_first.read(CHUNK)
-                data_queue.put(audio_first)
-                if not second_audio_disabled:
-                    audio_second = stream_second.read(CHUNK)
-
-                first_data.append(audio_first)
-                if not second_audio_disabled:
-                    second_data.append(audio_second)
-
-                num_samples += CHUNK
             else:
-                time.sleep(0.01)
-
+                time.sleep(0.001)
     finally:
-        stream_first.stop_stream()
-        stream_first.close()
-
+        thread_stream_first.join()
         if not second_audio_disabled:
-            stream_second.stop_stream()
-            stream_second.close()
-
+            thread_stream_second.join()
         audio.terminate()
 
 

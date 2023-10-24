@@ -193,15 +193,15 @@ class MainDialog(QMainWindow, vocWindowView.Ui_MainWindow):
         if sampled_audio is not None:
             audio_list = []
 
-            if self.line is None and sampled_audio.qsize() > 10:
-                for i in range(9):
+            if self.line is None and sampled_audio.qsize() > 50:
+                for i in range(30):
                     if not sampled_audio.empty():
                         audio_list.append(sampled_audio.get())
 
                 self.current_data = audio_list
 
             elif self.line is not None:
-                for i in range(9):
+                for i in range(30):
                     if not sampled_audio.empty():
                         self.current_data.pop(0)
                         self.current_data.append(sampled_audio.get())

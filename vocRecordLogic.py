@@ -350,7 +350,10 @@ def recording(worker):
                 frame_num += 1
                 current_time = datetime.datetime.now()
                 fps_seconds = (current_time - fps_time).total_seconds() + leftover_time
-                fps = frame_num / fps_seconds
+                if fps_seconds > 0:
+                    fps = frame_num / fps_seconds
+                else:
+                    fps = 30
                 leftover_time = 0.0
 
             else:
